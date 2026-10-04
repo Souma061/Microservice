@@ -1,0 +1,11 @@
+{
+  "name": "microservice",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter monolith dev",
+    "start": "pnpm --filter monolith start",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck"
+  }
+}
