@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "pnpm --filter monolith dev",
     "start": "pnpm --filter monolith start",
+    "worker": "pnpm --filter monolith worker",
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck"
   }

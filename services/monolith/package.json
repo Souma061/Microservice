@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --watch --env-file-if-exists=.env src/index.ts",
     "start": "node --env-file-if-exists=.env src/index.ts",
+    "worker": "node --env-file-if-exists=.env src/worker.ts",
     "test": "node --test \"src/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json",
     "db:generate": "prisma generate",
@@ -12,6 +13,8 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@fastify/multipart": "^10.1.2",
+    "@fastify/static": "^10.1.5",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "^7.10.0",
     "dotenv": "^18.0.5",
