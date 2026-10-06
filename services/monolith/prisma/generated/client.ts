@@ -31,8 +31,8 @@ export * from "./enums.ts"
  * const prisma = new PrismaClient({
  *   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
  * })
- * // Fetch zero or more Videos
- * const videos = await prisma.video.findMany()
+ * // Fetch zero or more Links
+ * const links = await prisma.link.findMany()
  * ```
  * 
  * Read more in our [docs](https://pris.ly/d/client).
@@ -42,12 +42,17 @@ export type PrismaClient<LogOpts extends Prisma.LogLevel = never, OmitOpts exten
 export { Prisma }
 
 /**
- * Model Video
+ * Model Link
  * 
  */
-export type Video = Prisma.VideoModel
+export type Link = Prisma.LinkModel
 /**
- * Model TranscodeJob
+ * Model Click
  * 
  */
-export type TranscodeJob = Prisma.TranscodeJobModel
+export type Click = Prisma.ClickModel
+/**
+ * Model Job
+ * 
+ */
+export type Job = Prisma.JobModel

@@ -1,20 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { copyFile, mkdir } from 'node:fs/promises';
-import path from 'node:path';
 
 import { config } from './config.ts';
 import { prisma } from './db.ts';
-import { outPath, rawPath } from './storage.ts';
 
 const workerId = `${process.pid}:${randomUUID().slice(0, 8)}`;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// ponytail: stub — swap for spawn('ffmpeg', ...) when renditions matter
-async function makeRendition(src: string, dst: string) {
-  await sleep(config.transcodeMs);
-  await mkdir(path.dirname(dst), { recursive: true });
-  await copyFile(src, dst);
-}
 
 const claimable = (staleBefore: Date) => ({
   OR: [
@@ -28,13 +17,13 @@ async function claim(): Promise<string | null> {
   const staleBefore = new Date(now.getTime() - config.leaseMs);
   const filter = claimable(staleBefore);
 
-  const candidate = await prisma.transcodeJob.findFirst({
+  const candidate = await prisma.job.findFirst({
     where: filter,
     orderBy: { createdAt: 'asc' },
   });
   if (!candidate) return null;
 
-  const won = await prisma.transcodeJob.updateMany({
+  const won = await prisma.job.updateMany({
     where: { id: candidate.id, ...filter },
     data: {
       status: 'processing',
@@ -47,18 +36,15 @@ async function claim(): Promise<string | null> {
   return won.count === 1 ? candidate.id : null;
 }
 
-async function finish(jobId: string, videoId: string, ok: boolean) {
-  const [jobStatus, videoStatus] = ok
-    ? (['ready', 'ready'] as const)
-    : (['failed', 'failed'] as const);
-  await prisma.$transaction([
-    prisma.transcodeJob.update({ where: { id: jobId }, data: { status: jobStatus } }),
-    prisma.video.update({ where: { id: videoId }, data: { status: videoStatus } }),
-  ]);
+async function finish(jobId: string, ok: boolean) {
+  await prisma.job.update({
+    where: { id: jobId },
+    data: { status: ok ? 'ready' : 'failed' },
+  });
 }
 
 async function retry(jobId: string) {
-  await prisma.transcodeJob.update({
+  await prisma.job.update({
     where: { id: jobId },
     data: { status: 'queued', claimedBy: null, claimedAt: null },
   });
@@ -68,19 +54,26 @@ async function runOnce(): Promise<boolean> {
   const jobId = await claim();
   if (!jobId) return false;
 
-  const job = await prisma.transcodeJob.findUnique({
-    where: { id: jobId },
-    include: { video: true },
-  });
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
   if (!job) return true;
 
   try {
-    await makeRendition(rawPath(job.videoId), outPath(job.videoId));
-    await finish(job.id, job.videoId, true);
+    // ponytail: COUNT(*) per job — O(clicks) per link. Coalesce one queued
+    // job per link (or count from a cursor) if hot links make the queue lag.
+    const clickCount = await prisma.click.count({
+      where: { linkId: job.linkId },
+    });
+    await prisma.$transaction([
+      prisma.link.update({
+        where: { id: job.linkId },
+        data: { clickCount },
+      }),
+      prisma.job.update({ where: { id: jobId }, data: { status: 'ready' } }),
+    ]);
   } catch (err) {
     console.error('[worker] job failed', err);
     if (job.attempts >= config.maxAttempts) {
-      await finish(job.id, job.videoId, false);
+      await finish(job.id, false);
     } else {
       await retry(job.id);
     }

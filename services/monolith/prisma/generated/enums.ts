@@ -9,17 +9,6 @@
 * 🟢 You can import this file directly.
 */
 
-export const VideoStatus = {
-  uploading: 'uploading',
-  queued: 'queued',
-  processing: 'processing',
-  ready: 'ready',
-  failed: 'failed'
-} as const
-
-export type VideoStatus = (typeof VideoStatus)[keyof typeof VideoStatus]
-
-
 export const JobStatus = {
   queued: 'queued',
   processing: 'processing',

@@ -1,0 +1,212 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { performance } from "node:perf_hooks";
+
+import autocannon from "autocannon";
+import pg from "pg";
+
+const { Client } = pg;
+
+const PORT = Number(process.env.PORT ?? 4000);
+const BASE = `http://localhost:${PORT}`;
+const CONNECTIONS = Number(process.env.BENCH_CONNECTIONS ?? 10);
+const DURATION = Number(process.env.BENCH_DURATION ?? 10);
+const WARMUP = 3;
+const DB_SAMPLES = 500;
+
+const ps = (cmd) =>
+  execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", cmd], {
+    encoding: "utf8",
+  }).trim();
+
+const pct = (sorted, p) => {
+  const i = (sorted.length - 1) * (p / 100);
+  const lo = Math.floor(i);
+  const hi = Math.ceil(i);
+  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+};
+
+const serverPid = () => {
+  const out = ps(
+    `(Get-NetTCPConnection -LocalPort ${PORT} -State Listen | Select-Object -First 1 -ExpandProperty OwningProcess)`,
+  );
+  const pid = Number(out.split(/\D+/).filter(Boolean)[0]);
+  if (!Number.isInteger(pid)) {
+    throw new Error(`nothing listening on :${PORT} — start the server first`);
+  }
+  return pid;
+};
+
+const procStats = (pid) => {
+  const out = ps(
+    `$p=Get-Process -Id ${pid}; [string]::Format([cultureinfo]::InvariantCulture,'{0} {1}',$p.CPU,$p.WorkingSet64)`,
+  );
+  const [cpu, ws] = out.split(/\s+/).map(Number);
+  return { cpu, ws };
+};
+
+const run = (url) =>
+  autocannon({ url, connections: CONNECTIONS, duration: DURATION });
+
+async function main() {
+  const pid = serverPid();
+  console.error(`# target ${BASE} (pid ${pid}), c=${CONNECTIONS}, ${DURATION}s`);
+
+  await autocannon({
+    url: `${BASE}/health`,
+    connections: CONNECTIONS,
+    duration: WARMUP,
+  }); // discarded
+
+  const links = await fetch(`${BASE}/links`).then((r) => r.json());
+  const targets = [
+    { label: "/health", url: `${BASE}/health` },
+    { label: "/health/ready", url: `${BASE}/health/ready` },
+    { label: "/links", url: `${BASE}/links` },
+  ];
+  if (links[0]?.code) {
+    targets.push({ label: `/${links[0].code} (302)`, url: `${BASE}/${links[0].code}` });
+  } else {
+    console.error("# no seeded link found — run `pnpm seed` first for the redirect row");
+  }
+
+  const rows = [];
+  for (const { label, url } of targets) {
+    const before = procStats(pid);
+    const t0 = performance.now();
+    const r = await run(url);
+    const elapsed = (performance.now() - t0) / 1000;
+    const after = procStats(pid);
+
+    const busyCores = (after.cpu - before.cpu) / elapsed;
+    rows.push({
+      endpoint: label,
+      rps: r.requests.average,
+      avg: r.latency.average,
+      p50: r.latency.p50,
+      p90: r.latency.p90,
+      p975: r.latency.p97_5,
+      p99: r.latency.p99,
+      max: r.latency.max,
+      codes: Object.entries(r.statusCodeStats ?? {})
+        .map(([code, v]) => `${code}\u00d7${v.count}`)
+        .join(" "),
+      errors: r.errors,
+      busyCores,
+      cpuPct: (busyCores / os.cpus().length) * 100,
+      memMB: after.ws / 1024 / 1024,
+    });
+  }
+
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  await client.query("select 1");
+
+  const dbSamples = [];
+  for (let i = 0; i < DB_SAMPLES; i++) {
+    const t = performance.now();
+    await client.query("select 1");
+    dbSamples.push(performance.now() - t);
+  }
+  const { rows: verRows } = await client.query("select version()");
+  const pgVersion = verRows[0].version;
+  await client.end();
+
+  const sorted = [...dbSamples].sort((a, b) => a - b);
+  const db = {
+    p50: pct(sorted, 50),
+    p95: pct(sorted, 95),
+    p99: pct(sorted, 99),
+    avg: dbSamples.reduce((a, b) => a + b, 0) / dbSamples.length,
+    max: sorted.at(-1),
+    n: dbSamples.length,
+  };
+
+  const cpu = os.cpus();
+  const env = [
+    ["Generated", new Date().toISOString()],
+    ["Run", `pnpm bench  →  services/monolith/scripts/bench.mjs`],
+    ["Node", process.version],
+    ["Platform", `${os.type()} ${os.release()} ${os.arch()}`],
+    ["CPU", `${cpu[0]?.model ?? "?"} × ${cpu.length} logical`],
+    ["Memory", `${(os.totalmem() / 1024 ** 3).toFixed(1)} GB`],
+    ["PostgreSQL", pgVersion],
+    ["App port", `${PORT}`],
+  ];
+
+  const method = [
+    ["Tool", "autocannon"],
+    ["Connections", `${CONNECTIONS}`],
+    ["Duration", `${DURATION}s per endpoint`],
+    ["Warmup", `${WARMUP}s against /health, discarded`],
+    ["DB probe", `${DB_SAMPLES} × SELECT 1, single connection, warmed`],
+  ];
+
+  const fmt = (n, d = 2) =>
+    n.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: d });
+
+  const table = (head, body) =>
+    `| ${head.join(" | ")} |\n| ${head.map(() => "---").join(" | ")} |\n${body
+      .map((r) => `| ${r.join(" | ")} |`)
+      .join("\n")}`;
+
+  const md = [
+    "# Phase 1 — Baseline",
+    "",
+    "> Auto-generated by `pnpm bench`. Re-run after every phase and append below",
+    "> — this file is the comparison table PRD §Phase 1 asks for.",
+    "",
+    "## Environment",
+    "",
+    table(["Item", "Value"], env.map(([k, v]) => [k, `\`${v}\``])),
+    "",
+    "## Method",
+    "",
+    table(["Setting", "Value"], method.map(([k, v]) => [k, v])),
+    "",
+    "**Percentiles:** autocannon emits HDR histogram buckets — it has no `p95`.",
+    "`p97.5` is recorded instead: it is ≥ p95, so it is a conservative bound, and",
+    "every later phase uses the same tool, so the numbers stay comparable.",
+    "",
+    "## Results",
+    "",
+    table(
+      ["Endpoint", "req/s", "avg ms", "p50", "p90", "p97.5", "p99", "max", "codes", "busy cores", "CPU %", "mem MB"],
+      rows.map((r) => [
+        `\`${r.endpoint}\``,
+        Math.round(r.rps).toLocaleString("en-US"),
+        fmt(r.avg),
+        fmt(r.p50),
+        fmt(r.p90),
+        fmt(r.p975),
+        fmt(r.p99),
+        fmt(r.max),
+        `\`${r.codes}\``,
+        fmt(r.busyCores),
+        fmt(r.cpuPct, 1),
+        fmt(r.memMB, 0),
+      ]),
+    ),
+    "",
+    "## Database latency",
+    "",
+    table(
+      ["Probe", "p50 ms", "p95 ms", "p99 ms", "avg ms", "max ms", "n"],
+      [["`SELECT 1`", fmt(db.p50, 3), fmt(db.p95, 3), fmt(db.p99, 3), fmt(db.avg, 3), fmt(db.max, 3), db.n]],
+    ),
+    "",
+  ].join("\n");
+
+  const out = path.resolve(import.meta.dirname, "../../../docs/benchmarks/phase1.md");
+  mkdirSync(path.dirname(out), { recursive: true });
+  writeFileSync(out, md);
+  console.error(`# wrote ${out}`);
+  console.log(md);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

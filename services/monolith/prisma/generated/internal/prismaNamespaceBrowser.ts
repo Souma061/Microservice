@@ -51,8 +51,9 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
-  Video: 'Video',
-  TranscodeJob: 'TranscodeJob'
+  Link: 'Link',
+  Click: 'Click',
+  Job: 'Job'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -71,22 +72,31 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
 
 
-export const VideoScalarFieldEnum = {
+export const LinkScalarFieldEnum = {
   id: 'id',
+  code: 'code',
+  url: 'url',
   ownerId: 'ownerId',
-  title: 'title',
-  description: 'description',
-  storageKey: 'storageKey',
-  status: 'status',
+  clickCount: 'clickCount',
   createdAt: 'createdAt'
 } as const
 
-export type VideoScalarFieldEnum = (typeof VideoScalarFieldEnum)[keyof typeof VideoScalarFieldEnum]
+export type LinkScalarFieldEnum = (typeof LinkScalarFieldEnum)[keyof typeof LinkScalarFieldEnum]
 
 
-export const TranscodeJobScalarFieldEnum = {
+export const ClickScalarFieldEnum = {
   id: 'id',
-  videoId: 'videoId',
+  linkId: 'linkId',
+  referrer: 'referrer',
+  createdAt: 'createdAt'
+} as const
+
+export type ClickScalarFieldEnum = (typeof ClickScalarFieldEnum)[keyof typeof ClickScalarFieldEnum]
+
+
+export const JobScalarFieldEnum = {
+  id: 'id',
+  linkId: 'linkId',
   status: 'status',
   attempts: 'attempts',
   claimedBy: 'claimedBy',
@@ -94,7 +104,7 @@ export const TranscodeJobScalarFieldEnum = {
   createdAt: 'createdAt'
 } as const
 
-export type TranscodeJobScalarFieldEnum = (typeof TranscodeJobScalarFieldEnum)[keyof typeof TranscodeJobScalarFieldEnum]
+export type JobScalarFieldEnum = (typeof JobScalarFieldEnum)[keyof typeof JobScalarFieldEnum]
 
 
 export const SortOrder = {

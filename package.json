@@ -6,6 +6,9 @@
     "dev": "pnpm --filter monolith dev",
     "start": "pnpm --filter monolith start",
     "worker": "pnpm --filter monolith worker",
+    "bench": "pnpm --filter monolith bench",
+    "seed": "pnpm --filter monolith seed",
+    "load": "docker run --rm -v \"%CD%\\tests\\k6:/scripts\" -e TARGET_VUS -e RAMP -e HOLD -e BASE_URL grafana/k6 run /scripts/browse.js",
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck"
   }

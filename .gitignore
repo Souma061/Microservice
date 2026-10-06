@@ -2,6 +2,7 @@ node_modules/
 dist/
 prisma/generated/
 storage/
+test-assets/
 *.log
 .env
 docs/**

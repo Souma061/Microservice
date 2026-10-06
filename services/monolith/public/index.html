@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Micro Video</title>
+<title>Micro Links</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -18,117 +18,126 @@
   }
   h1 { font-size: 16px; margin: 0; letter-spacing: .04em; }
   h1 span { color: #6ea8fe; }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px; }
   .status { margin-left: auto; font-size: 12px; color: #8b93a1; }
   .status b { color: #6ea8fe; font-weight: 600; }
 
   form {
-    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    display: flex; gap: 10px; align-items: center;
     background: #14181e; border: 1px solid #1e232a;
-    border-radius: 10px; padding: 14px; margin-bottom: 24px;
+    border-radius: 10px; padding: 14px; margin-bottom: 18px;
   }
   input, button {
     font: inherit; border-radius: 7px; border: 1px solid #2a313b;
     background: #0f1216; color: inherit; padding: 8px 12px;
   }
-  input[type=text] { flex: 1; min-width: 180px; }
-  input[type=file] { max-width: 260px; }
+  input[type=url] { flex: 1; min-width: 220px; }
   button {
-    background: #2563eb; border-color: #2563eb; cursor: pointer;
-    font-weight: 600;
+    background: #2563eb; border-color: #2563eb; cursor: pointer; font-weight: 600;
   }
   button:disabled { opacity: .5; cursor: default; }
-  .hint { font-size: 12px; color: #8b93a1; width: 100%; }
+  .hint { font-size: 12px; color: #8b93a1; }
+  .error { color: #f87171; font-size: 13px; margin-bottom: 12px; display: none; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
-  .card {
-    background: #14181e; border: 1px solid #1e232a; border-radius: 10px;
-    overflow: hidden; cursor: pointer; transition: border-color .15s;
+  .created {
+    display: none; align-items: center; gap: 10px;
+    background: #10231a; border: 1px solid #1c5137;
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 18px;
   }
-  .card:hover { border-color: #2563eb; }
-  .card video { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; display: block; }
-  .card .meta { padding: 10px 12px; }
-  .card .title { font-weight: 600; font-size: 14px; }
-  .card .sub { font-size: 12px; color: #8b93a1; margin-top: 2px; }
-  .empty { color: #8b93a1; text-align: center; padding: 60px 0; }
+  .created code { color: #4ade80; font-size: 15px; }
+  .created a { color: #6ea8fe; text-decoration: none; }
+  .created button { background: #1e232a; border-color: #2a313b; font-weight: 400; }
 
-  dialog {
-    border: 1px solid #2a313b; background: #14181e; color: inherit;
-    border-radius: 12px; padding: 0; max-width: 860px; width: 92%;
-  }
-  dialog::backdrop { background: rgba(0,0,0,.75); }
-  dialog video { width: 100%; aspect-ratio: 16/9; background: #000; display: block; }
-  dialog .bar { display: flex; gap: 12px; align-items: center; padding: 12px 16px; }
-  dialog .bar strong { font-size: 15px; }
-  dialog .bar button { margin-left: auto; background: #1e232a; border-color: #2a313b; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #1e232a; }
+  th { color: #8b93a1; font-weight: 500; font-size: 12px; text-transform: uppercase; }
+  tr:hover td { background: #14181e; }
+  td a.code { color: #6ea8fe; text-decoration: none; font-family: ui-monospace, monospace; }
+  td.url { color: #8b93a1; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td.count { font-variant-numeric: tabular-nums; text-align: right; }
+  td.when { color: #8b93a1; font-size: 12px; white-space: nowrap; }
+  .empty { color: #8b93a1; text-align: center; padding: 50px 0; }
 </style>
 </head>
 <body>
 <header>
-  <h1>MICRO<span>VIDEO</span></h1>
-  <div class="status">API <b id="api">…</b> · DB <b id="db">…</b> · ready <b id="count">0</b></div>
+  <h1>MICRO<span>LINKS</span></h1>
+  <div class="status">API <b id="api">…</b> · DB <b id="db">…</b> · links <b id="count">0</b></div>
 </header>
 
 <main>
   <form id="form">
-    <input type="text" id="title" placeholder="Title" maxlength="200" />
-    <input type="file" id="file" accept="video/*" required />
-    <button type="submit" id="go">Upload</button>
-    <div class="hint">202 → job queued → worker picks it up → appears below when ready. Stop the worker and this page keeps working.</div>
+    <input type="url" id="url" placeholder="https://example.com/a/very/long/url" required />
+    <button type="submit" id="go">Shorten</button>
+    <span class="hint">201 → short code · GET /:code → 302 + click logged + job queued</span>
   </form>
 
-  <div class="grid" id="grid"></div>
-  <div class="empty" id="empty">No videos yet.</div>
-</main>
+  <div class="error" id="error"></div>
 
-<dialog id="dlg">
-  <video id="player" controls autoplay></video>
-  <div class="bar"><strong id="dlgTitle"></strong><button id="close">Close</button></div>
-</dialog>
+  <div class="created" id="created">
+    <span>created</span>
+    <code id="shortCode"></code>
+    <a id="shortLink" target="_blank" rel="noopener"></a>
+    <button type="button" id="copy">copy</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Short</th><th>Destination</th><th style="text-align:right">Clicks</th><th>Created</th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="empty" id="empty">No links yet — shorten one above.</div>
+</main>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const fmt = (t) => new Date(t).toLocaleTimeString();
+const when = (t) => new Date(t).toLocaleString();
 
 async function get(url, opts) {
   const r = await fetch(url, opts);
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
-  return r.json();
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || r.status);
+  return body;
 }
 
-function card(v) {
-  const el = document.createElement('div');
-  el.className = 'card';
-  el.innerHTML = `
-    <video src="${v.url}" preload="metadata" muted></video>
-    <div class="meta">
-      <div class="title"></div>
-      <div class="sub">${fmt(v.createdAt)}</div>
-    </div>`;
-  el.querySelector('.title').textContent = v.title;
-  el.onclick = () => {
-    $('player').src = v.url;
-    $('dlgTitle').textContent = v.title;
-    $('dlg').showModal();
-  };
-  return el;
+function row(link) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><a class="code" target="_blank" rel="noopener"></a></td>
+    <td class="url"></td>
+    <td class="count"></td>
+    <td class="when"></td>`;
+  const a = tr.querySelector('a.code');
+  a.textContent = link.short;
+  a.href = link.short;
+  tr.querySelector('.url').textContent = link.url;
+  tr.querySelector('.url').title = link.url;
+  tr.querySelector('.count').textContent = link.clickCount;
+  tr.querySelector('.when').textContent = when(link.createdAt);
+  return tr;
 }
 
-async function refreshFeed() {
-  const list = await get('/feed');
+async function refreshLinks() {
+  const list = await get('/links');
   $('count').textContent = list.length;
   $('empty').style.display = list.length ? 'none' : 'block';
 
-  const grid = $('grid');
-  const stale = new Map([...grid.children].map((el) => [el.dataset.id, el]));
+  const body = $('rows');
+  const stale = new Map([...body.children].map((tr) => [tr.dataset.code, tr]));
 
-  for (const v of list) {
-    let el = stale.get(v.id);
-    if (el) stale.delete(v.id);
-    else { el = card(v); el.dataset.id = v.id; }
-    grid.appendChild(el); // reorders in place, never rebuilds
+  for (const link of list) {
+    let tr = stale.get(link.code);
+    if (tr) {
+      stale.delete(link.code);
+      tr.querySelector('.count').textContent = link.clickCount;
+    } else {
+      tr = row(link);
+      tr.dataset.code = link.code;
+    }
+    body.appendChild(tr); // reorders in place, never rebuilds
   }
-  for (const el of stale.values()) el.remove();
+  for (const tr of stale.values()) tr.remove();
 }
 
 async function refreshHealth() {
@@ -139,31 +148,33 @@ async function refreshHealth() {
 
 $('form').onsubmit = async (e) => {
   e.preventDefault();
-  const file = $('file').files[0];
-  if (!file) return;
+  $('error').style.display = 'none';
   $('go').disabled = true;
   try {
-    const fd = new FormData();
-    fd.append('title', $('title').value || file.name);
-    fd.append('file', file, file.name);
-    const r = await fetch('/videos', { method: 'POST', body: fd });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
-    const { videoId, status } = await r.json();
-    $('title').value = '';
-    $('file').value = '';
-    console.log('queued', videoId, status);
+    const link = await get('/links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: $('url').value }),
+    });
+    $('url').value = '';
+    $('shortCode').textContent = link.code;
+    $('shortLink').href = link.short;
+    $('shortLink').textContent = location.origin + link.short;
+    $('created').style.display = 'flex';
+    await refreshLinks();
   } catch (err) {
-    alert('Upload failed: ' + err.message);
+    $('error').textContent = err.message;
+    $('error').style.display = 'block';
   } finally {
     $('go').disabled = false;
   }
 };
 
-$('close').onclick = () => { $('player').pause(); $('dlg').close(); };
+$('copy').onclick = () => navigator.clipboard.writeText(location.origin + $('shortLink').getAttribute('href'));
 
-refreshFeed();
+refreshLinks();
 refreshHealth();
-setInterval(refreshFeed, 1500);
+setInterval(refreshLinks, 1500);
 setInterval(refreshHealth, 3000);
 </script>
 </body>

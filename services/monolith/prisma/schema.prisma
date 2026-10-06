@@ -7,14 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum VideoStatus {
-  uploading
-  queued
-  processing
-  ready
-  failed
-}
-
 enum JobStatus {
   queued
   processing
@@ -22,29 +14,41 @@ enum JobStatus {
   failed
 }
 
-model Video {
-  id          String      @id @default(uuid())
-  ownerId     String      @map("owner_id")
-  title       String
-  description String      @default("")
-  storageKey  String      @map("storage_key")
-  status      VideoStatus @default(uploading)
-  createdAt   DateTime    @default(now()) @map("created_at")
+model Link {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  url        String
+  ownerId    String   @map("owner_id")
+  clickCount Int      @default(0) @map("click_count")
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  jobs TranscodeJob[]
+  clicks Click[]
+  jobs   Job[]
 
-  @@map("videos")
+  @@map("links")
 }
 
-model TranscodeJob {
+model Click {
+  id        String   @id @default(uuid())
+  linkId    String   @map("link_id")
+  referrer  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  link      Link     @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId, createdAt])
+  @@map("clicks")
+}
+
+model Job {
   id        String    @id @default(uuid())
-  videoId   String    @unique @map("video_id")
-  video     Video     @relation(fields: [videoId], references: [id])
+  linkId    String    @map("link_id")
+  link      Link      @relation(fields: [linkId], references: [id], onDelete: Cascade)
   status    JobStatus @default(queued)
   attempts  Int       @default(0)
   claimedBy String?   @map("claimed_by")
   claimedAt DateTime? @map("claimed_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  @@map("transcode_jobs")
+  @@index([status, createdAt])
+  @@map("jobs")
 }

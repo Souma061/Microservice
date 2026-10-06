@@ -8,12 +8,13 @@
     "worker": "node --env-file-if-exists=.env src/worker.ts",
     "test": "node --test \"src/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json",
+    "bench": "node --env-file-if-exists=.env scripts/bench.mjs",
+    "seed": "node --env-file-if-exists=.env scripts/seed.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@fastify/multipart": "^10.1.2",
     "@fastify/static": "^10.1.5",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "^7.10.0",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@types/node": "^24.10.1",
     "@types/pg": "^8.16.0",
+    "autocannon": "^8.0.0",
     "prisma": "7.10.0",
     "typescript": "^5.9.3"
   }

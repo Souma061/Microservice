@@ -8,6 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
-export type * from './models/Video.ts'
-export type * from './models/TranscodeJob.ts'
+export type * from './models/Link.ts'
+export type * from './models/Click.ts'
+export type * from './models/Job.ts'
 export type * from './commonInputTypes.ts'
